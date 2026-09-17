@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Container,
   Typography,
   Paper,
@@ -14,11 +15,12 @@ import {
   TableRow,
   MenuItem,
 } from "@mui/material";
-import api from "../api/api";
+import api, { errorMessage } from "../api/api";
 
 function ContractsPage() {
   const [contracts, setContracts] = useState([]);
-  const [filteredContracts, setFilteredContracts] = useState([]);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [vendors, setVendors] = useState([]);
   const [search, setSearch] = useState("");
   const [editingContractId, setEditingContractId] = useState(null);
@@ -34,36 +36,23 @@ function ContractsPage() {
   });
 
   useEffect(() => {
-    fetchContracts();
-    fetchVendors();
+    let ignore = false;
+    api.get("/contracts").then(response => {
+      if (!ignore) setContracts(response.data);
+    }).catch(err => { if (!ignore) setError(errorMessage(err)); });
+    api.get("/vendors").then(response => { if (!ignore) setVendors(response.data); }).catch(err => { if (!ignore) setError(errorMessage(err)); });
+    return () => { ignore = true; };
   }, []);
 
-  useEffect(() => {
-    const filtered = contracts.filter((contract) =>
-      (contract.contractTitle || "").toLowerCase().includes(search.toLowerCase()) ||
-      (contract.status || "").toLowerCase().includes(search.toLowerCase()) ||
-      (contract.vendor?.companyName || "").toLowerCase().includes(search.toLowerCase())
-    );
-    setFilteredContracts(filtered);
-  }, [search, contracts]);
+  const filteredContracts = contracts.filter((contract) =>
+    (contract.contractTitle || "").toLowerCase().includes(search.toLowerCase()) ||
+    (contract.status || "").toLowerCase().includes(search.toLowerCase()) ||
+    (contract.vendor?.companyName || "").toLowerCase().includes(search.toLowerCase())
+  );
 
   const fetchContracts = async () => {
-    try {
-      const response = await api.get("/contracts");
-      setContracts(response.data);
-      setFilteredContracts(response.data);
-    } catch (error) {
-      console.error("Error fetching contracts:", error);
-    }
-  };
-
-  const fetchVendors = async () => {
-    try {
-      const response = await api.get("/vendors");
-      setVendors(response.data);
-    } catch (error) {
-      console.error("Error fetching vendors:", error);
-    }
+    const response = await api.get("/contracts");
+    setContracts(response.data);
   };
 
   const handleChange = (e) => {
@@ -85,12 +74,26 @@ function ContractsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
 
+    if (!form.vendorId || !form.contractTitle.trim()) {
+      setError("Select a vendor and enter a contract title");
+      return;
+    }
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      setError("End date must be on or after start date");
+      return;
+    }
+    if (form.contractValue !== "" && (!Number.isFinite(Number(form.contractValue)) || Number(form.contractValue) < 0)) {
+      setError("Contract value must be a non-negative number");
+      return;
+    }
+    setSaving(true);
     const payload = {
       contractTitle: form.contractTitle,
-      startDate: form.startDate,
-      endDate: form.endDate,
-      contractValue: form.contractValue,
+      startDate: form.startDate || null,
+      endDate: form.endDate || null,
+      contractValue: form.contractValue === "" ? null : form.contractValue,
       paymentTerms: form.paymentTerms,
       status: form.status,
     };
@@ -103,18 +106,23 @@ function ContractsPage() {
       }
 
       resetForm();
-      fetchContracts();
+      await fetchContracts();
     } catch (error) {
-      console.error("Error saving contract:", error);
+      setError(errorMessage(error));
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm("Delete this contract? This cannot be undone.")) return;
+    setError("");
     try {
       await api.delete(`/contracts/${id}`);
-      fetchContracts();
+      if (editingContractId === id) resetForm();
+      await fetchContracts();
     } catch (error) {
-      console.error("Error deleting contract:", error);
+      setError(errorMessage(error));
     }
   };
 
@@ -124,7 +132,7 @@ function ContractsPage() {
       contractTitle: contract.contractTitle || "",
       startDate: contract.startDate || "",
       endDate: contract.endDate || "",
-      contractValue: contract.contractValue || "",
+      contractValue: contract.contractValue ?? "",
       paymentTerms: contract.paymentTerms || "",
       status: contract.status || "",
     });
@@ -133,6 +141,7 @@ function ContractsPage() {
 
   return (
     <Container sx={{ mt: 5, mb: 5 }}>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Paper
         sx={{
           p: 3,
@@ -170,6 +179,7 @@ function ContractsPage() {
             <TextField
               select
               label="Select Vendor"
+              required
               name="vendorId"
               value={form.vendorId}
               onChange={handleChange}
@@ -184,6 +194,7 @@ function ContractsPage() {
 
             <TextField
               label="Contract Title"
+              required
               name="contractTitle"
               value={form.contractTitle}
               onChange={handleChange}
@@ -212,6 +223,8 @@ function ContractsPage() {
 
             <TextField
               label="Contract Value"
+              type="number"
+              slotProps={{ htmlInput: { min: 0, step: "any" } }}
               name="contractValue"
               value={form.contractValue}
               onChange={handleChange}
@@ -241,7 +254,7 @@ function ContractsPage() {
             </TextField>
 
             <Stack direction="row" spacing={2}>
-              <Button type="submit" variant="contained" size="large">
+              <Button type="submit" variant="contained" size="large" disabled={saving}>
                 {editingContractId ? "Update Contract" : "Add Contract"}
               </Button>
 

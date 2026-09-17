@@ -1,43 +1,32 @@
 import React, { useEffect, useState } from "react";
-import { Container, Typography, Paper, Stack, Box } from "@mui/material";
+import { Container, Typography, Paper, Stack, Box, Alert } from "@mui/material";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import BusinessOutlinedIcon from "@mui/icons-material/BusinessOutlined";
 import AssignmentTurnedInOutlinedIcon from "@mui/icons-material/AssignmentTurnedInOutlined";
-import api from "../api/api";
+import api, { errorMessage } from "../api/api";
 
 function DashboardPage() {
-  const [totalVendors, setTotalVendors] = useState(0);
-  const [totalContracts, setTotalContracts] = useState(0);
-  const [activeContracts, setActiveContracts] = useState(0);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchDashboardData();
+    let ignore = false;
+    Promise.all([api.get("/vendors"), api.get("/contracts")])
+      .then(([vendors, contracts]) => {
+        if (!ignore) setData({
+          totalVendors: vendors.data.length,
+          totalContracts: contracts.data.length,
+          activeContracts: contracts.data.filter(contract => contract.status?.toLowerCase() === "active").length,
+        });
+      })
+      .catch(err => { if (!ignore) setError(errorMessage(err)); });
+    return () => { ignore = true; };
   }, []);
-
-  const fetchDashboardData = async () => {
-    try {
-      const vendorResponse = await api.get("/vendors");
-      const contractResponse = await api.get("/contracts");
-
-      const vendors = vendorResponse.data;
-      const contracts = contractResponse.data;
-
-      setTotalVendors(vendors.length);
-      setTotalContracts(contracts.length);
-
-      const activeCount = contracts.filter(
-        (contract) =>
-          contract.status && contract.status.toLowerCase() === "active"
-      ).length;
-
-      setActiveContracts(activeCount);
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error);
-    }
-  };
 
   return (
     <Container sx={{ mt: 5, mb: 5 }}>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {!data && !error && <Typography role="status">Loading dashboard?</Typography>}
       <Paper
         sx={{
           p: 4,
@@ -99,7 +88,7 @@ function DashboardPage() {
           <BusinessOutlinedIcon sx={{ fontSize: 42, color: "#1976d2" }} />
           <Box>
             <Typography variant="h6">Total Vendors</Typography>
-            <Typography variant="h4">{totalVendors}</Typography>
+            <Typography variant="h4">{data?.totalVendors ?? "?"}</Typography>
           </Box>
         </Paper>
 
@@ -118,7 +107,7 @@ function DashboardPage() {
           <DescriptionOutlinedIcon sx={{ fontSize: 42, color: "#1976d2" }} />
           <Box>
             <Typography variant="h6">Total Contracts</Typography>
-            <Typography variant="h4">{totalContracts}</Typography>
+            <Typography variant="h4">{data?.totalContracts ?? "?"}</Typography>
           </Box>
         </Paper>
 
@@ -137,7 +126,7 @@ function DashboardPage() {
           <AssignmentTurnedInOutlinedIcon sx={{ fontSize: 42, color: "#1976d2" }} />
           <Box>
             <Typography variant="h6">Active Contracts</Typography>
-            <Typography variant="h4">{activeContracts}</Typography>
+            <Typography variant="h4">{data?.activeContracts ?? "?"}</Typography>
           </Box>
         </Paper>
       </Stack>

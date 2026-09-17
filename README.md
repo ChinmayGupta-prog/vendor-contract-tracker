@@ -1,6 +1,6 @@
 # Vendor Contract Tracker
 
-A full-stack application for maintaining vendor records and their contracts. The Spring Boot REST API persists vendors and contracts in MySQL, while the React interface provides searchable directories, status and expiry views, portfolio metrics, and a contract-renewal workflow.
+A full-stack application for maintaining vendor records and their contracts. The Spring Boot REST API persists vendors and contracts in MySQL, while the React interface provides searchable vendor and contract directories and a summary dashboard.
 
 ## Tech stack
 
@@ -18,11 +18,10 @@ A full-stack application for maintaining vendor records and their contracts. The
 - Create, view, update, and delete vendors.
 - Create, update, and delete contracts associated with a selected vendor.
 - Cascade contract persistence and deletion through the vendor aggregate.
-- Search and filter vendors by text, status, category, and city.
-- Search and filter contracts by text, status/expiry health, and vendor.
-- Calculate dashboard metrics in the client, including contract counts, total portfolio value, recent contracts, and agreements expiring within 45 days.
-- Preview and apply contract renewal changes for end date, value, and status.
-- Display responsive tables, status indicators, notifications, and confirmation prompts with Material UI.
+- Search vendors by company, status, category, and city; search contracts by title, status, and vendor name.
+- Show total vendors, total contracts, and contracts marked Active on the dashboard.
+- Validate required names, email format, non-negative contract values, and contract date ordering.
+- Display request failures and confirm deletion, including the removal of a vendor's contracts.
 
 ## Architecture
 
@@ -60,7 +59,7 @@ The backend is configured at `http://localhost:8080`. Request and response bodie
 | Method | Endpoint | Behavior |
 | --- | --- | --- |
 | `GET` | `/api/vendors` | Return all vendors. |
-| `GET` | `/api/vendors/{id}` | Return one vendor or fail if it is not found. |
+| `GET` | `/api/vendors/{id}` | Return one vendor, or HTTP 404 if it is not found. |
 | `POST` | `/api/vendors` | Persist a vendor from the request body. |
 | `PUT` | `/api/vendors/{id}` | Replace the editable fields of an existing vendor. |
 | `DELETE` | `/api/vendors/{id}` | Delete a vendor; mapped contracts are deleted through cascading. |
@@ -69,7 +68,7 @@ The backend is configured at `http://localhost:8080`. Request and response bodie
 | `PUT` | `/api/contracts/{id}/vendor/{vendorId}` | Update a contract and assign it to the specified vendor. |
 | `DELETE` | `/api/contracts/{id}` | Delete a contract. |
 
-There is no dedicated `GET /api/contracts/{id}` endpoint; the edit screen loads the collection and finds the requested contract in the browser.
+There is no dedicated `GET /api/contracts/{id}` endpoint; the edit form uses the selected table row.
 
 ## Local setup
 
@@ -107,11 +106,7 @@ There is no dedicated `GET /api/contracts/{id}` endpoint; the edit screen loads 
 
 ### Frontend
 
-The checked-in Axios client currently targets `http://localhost:8081/api`, while the backend configuration uses port `8080`. Before starting the UI, either change `frontend/src/api/api.js` to port `8080`, or start Spring Boot on port `8081`:
-
-```powershell
-.\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--server.port=8081"
-```
+The frontend and backend both default to port `8080` for the API. To use a different API address, set `VITE_API_BASE_URL` in `frontend/.env.local`, for example `VITE_API_BASE_URL=http://localhost:8081/api`, and restart Vite.
 
 Then, in a second terminal:
 
@@ -141,10 +136,20 @@ npm run build
 | Explicit vendor ID in contract create/update URLs | Trusting a nested vendor object from the request body | Forces the service to resolve an existing managed vendor before saving the contract. |
 | Client-side dashboard and filters | Additional reporting/search endpoints | Keeps the initial API small and derives views from the two existing collections; this is suitable for the current dataset but will not scale like server-side filtering and aggregation. |
 | Material UI components and a shared theme | Building every control and style from scratch | Provides consistent responsive forms, tables, feedback, and accessible UI primitives. |
-| Direct entity request/response bodies | Separate API DTOs and mapping layer | Reduces code for this small project, at the cost of coupling the API contract to persistence entities and weakening control over exposed fields. |
+| Direct entity request/response bodies | Separate API DTOs and mapping layer | Keeps this small application simple, but couples its API to persistence entities. |
+
+## Validation and error handling
+
+Vendor company name and contract title must contain non-whitespace text. Contracts must reference an existing vendor. Email is optional but must be valid when supplied. Contract dates and values are optional; supplied values cannot be negative, and an end date cannot precede a supplied start date. Zero values and same-day contracts are valid.
+
+Invalid request bodies return HTTP 400 with a JSON `message`. Missing vendors and contracts return HTTP 404. The UI displays request failures and asks for confirmation before deleting records.
+
+## Testing
+
+Run `mvn test` (or `.\mvnw.cmd test`) with the configured MySQL database running. The suite includes a context-load check and transactional API regression tests for validation, zero values, error responses, and CORS. Regression test data is rolled back.
+
+Run `npm run lint` and `npm run build` from `frontend`.
 
 ## Current scope
 
-The backend includes the validation starter, but the entity fields have no Bean Validation annotations and controller bodies do not use `@Valid`; therefore there is no server-side input validation yet. The React forms only mark company name, contract title, and vendor selection as required through browser validation.
-
-There is no authentication or authorization. The only automated backend test is the generated Spring context-load test, and there are no frontend tests. Runtime exceptions for missing records are not translated by a global exception handler into explicit API error responses.
+There is no authentication or authorization. This is a local development application, with development database credentials in application.properties. Dashboard Active counts use the stored status, not automatic expiry calculation. Renewal workflows, expiry alerts, portfolio value metrics, pagination, and frontend automated tests are not implemented.

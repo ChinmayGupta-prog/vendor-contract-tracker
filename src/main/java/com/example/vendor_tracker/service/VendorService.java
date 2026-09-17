@@ -3,6 +3,8 @@ package com.example.vendor_tracker.service;
 import com.example.vendor_tracker.entity.Vendor;
 import com.example.vendor_tracker.repository.VendorRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -21,7 +23,7 @@ public class VendorService {
 
     public Vendor getVendorById(Long id) {
         return vendorRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Vendor not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendor not found"));
     }
 
     public Vendor createVendor(Vendor vendor) {
@@ -41,6 +43,6 @@ public class VendorService {
     }
 
     public void deleteVendor(Long id) {
-        vendorRepository.deleteById(id);
+        vendorRepository.delete(vendorRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendor not found")));
     }
 }

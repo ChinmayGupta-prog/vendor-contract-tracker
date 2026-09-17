@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Container,
   Typography,
   TextField,
@@ -14,11 +15,12 @@ import {
   Stack,
   MenuItem,
 } from "@mui/material";
-import api from "../api/api";
+import api, { errorMessage } from "../api/api";
 
 function VendorsPage() {
   const [vendors, setVendors] = useState([]);
-  const [filteredVendors, setFilteredVendors] = useState([]);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     companyName: "",
@@ -34,29 +36,25 @@ function VendorsPage() {
 
   const [editingVendorId, setEditingVendorId] = useState(null);
 
-  const fetchVendors = async () => {
-    try {
-      const response = await api.get("/vendors");
-      setVendors(response.data);
-      setFilteredVendors(response.data);
-    } catch (error) {
-      console.error("Error fetching vendors:", error);
-    }
-  };
-
   useEffect(() => {
-    fetchVendors();
+    let ignore = false;
+    api.get("/vendors").then(response => {
+      if (!ignore) setVendors(response.data);
+    }).catch(err => { if (!ignore) setError(errorMessage(err)); });
+    return () => { ignore = true; };
   }, []);
 
-  useEffect(() => {
-    const filtered = vendors.filter((vendor) =>
-      (vendor.companyName || "").toLowerCase().includes(search.toLowerCase()) ||
-      (vendor.city || "").toLowerCase().includes(search.toLowerCase()) ||
-      (vendor.category || "").toLowerCase().includes(search.toLowerCase()) ||
-      (vendor.status || "").toLowerCase().includes(search.toLowerCase())
-    );
-    setFilteredVendors(filtered);
-  }, [search, vendors]);
+  const filteredVendors = vendors.filter((vendor) =>
+    (vendor.companyName || "").toLowerCase().includes(search.toLowerCase()) ||
+    (vendor.city || "").toLowerCase().includes(search.toLowerCase()) ||
+    (vendor.category || "").toLowerCase().includes(search.toLowerCase()) ||
+    (vendor.status || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const fetchVendors = async () => {
+    const response = await api.get("/vendors");
+    setVendors(response.data);
+  };
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -77,6 +75,12 @@ function VendorsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    if (!form.companyName.trim()) {
+      setError("Company name is required");
+      return;
+    }
+    setSaving(true);
 
     try {
       if (editingVendorId) {
@@ -86,18 +90,23 @@ function VendorsPage() {
       }
 
       resetForm();
-      fetchVendors();
+      await fetchVendors();
     } catch (error) {
-      console.error("Error saving vendor:", error);
+      setError(errorMessage(error));
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm("Delete this vendor and all its contracts? This cannot be undone.")) return;
+    setError("");
     try {
       await api.delete(`/vendors/${id}`);
-      fetchVendors();
+      if (editingVendorId === id) resetForm();
+      await fetchVendors();
     } catch (error) {
-      console.error("Error deleting vendor:", error);
+      setError(errorMessage(error));
     }
   };
 
@@ -116,6 +125,7 @@ function VendorsPage() {
 
   return (
     <Container sx={{ mt: 5, mb: 5 }}>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Paper
         sx={{
           p: 3,
@@ -150,6 +160,7 @@ function VendorsPage() {
           <Stack spacing={2}>
             <TextField
               label="Company Name"
+              required
               name="companyName"
               value={form.companyName}
               onChange={handleChange}
@@ -164,6 +175,7 @@ function VendorsPage() {
             />
             <TextField
               label="Email"
+              type="email"
               name="email"
               value={form.email}
               onChange={handleChange}
@@ -205,7 +217,7 @@ function VendorsPage() {
             </TextField>
 
             <Stack direction="row" spacing={2}>
-              <Button type="submit" variant="contained" size="large">
+              <Button type="submit" variant="contained" size="large" disabled={saving}>
                 {editingVendorId ? "Update Vendor" : "Add Vendor"}
               </Button>
 

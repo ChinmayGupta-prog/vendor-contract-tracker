@@ -5,10 +5,11 @@ import com.example.vendor_tracker.service.ContractService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/contracts")
-@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:5174"})
+@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:5174", "http://localhost:4173", "http://127.0.0.1:5173", "http://127.0.0.1:5174", "http://127.0.0.1:4173"})
 public class ContractController {
 
     private final ContractService contractService;
@@ -23,7 +24,7 @@ public class ContractController {
     }
 
     @PostMapping("/vendor/{vendorId}")
-    public Contract createContract(@PathVariable Long vendorId, @RequestBody Contract contract) {
+    public Contract createContract(@PathVariable Long vendorId, @Valid @RequestBody Contract contract) {
         return contractService.createContract(vendorId, contract);
     }
 
@@ -31,7 +32,7 @@ public class ContractController {
     public Contract updateContract(
             @PathVariable Long id,
             @PathVariable Long vendorId,
-            @RequestBody Contract contract) {
+            @Valid @RequestBody Contract contract) {
         return contractService.updateContract(id, vendorId, contract);
     }
 

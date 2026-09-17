@@ -5,6 +5,8 @@ import com.example.vendor_tracker.entity.Vendor;
 import com.example.vendor_tracker.repository.ContractRepository;
 import com.example.vendor_tracker.repository.VendorRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -25,17 +27,17 @@ public class ContractService {
 
     public Contract createContract(Long vendorId, Contract contract) {
         Vendor vendor = vendorRepository.findById(vendorId)
-                .orElseThrow(() -> new RuntimeException("Vendor not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendor not found"));
         contract.setVendor(vendor);
         return contractRepository.save(contract);
     }
 
     public Contract updateContract(Long id, Long vendorId, Contract updatedContract) {
         Contract contract = contractRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Contract not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract not found"));
 
         Vendor vendor = vendorRepository.findById(vendorId)
-                .orElseThrow(() -> new RuntimeException("Vendor not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendor not found"));
 
         contract.setContractTitle(updatedContract.getContractTitle());
         contract.setStartDate(updatedContract.getStartDate());
@@ -49,6 +51,6 @@ public class ContractService {
     }
 
     public void deleteContract(Long id) {
-        contractRepository.deleteById(id);
+        contractRepository.delete(contractRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract not found")));
     }
 }
